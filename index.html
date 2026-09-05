@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pulse Grid — Step Sequencer</title>
+<style>
+:root{
+  --bg:#0a0c11;--panel:#11141c;--panel2:#171b25;--line:#292f3c;
+  --text:#f4f6fb;--muted:#8f98a9;--accent:#7c5cff;--accent2:#a993ff;
+  --green:#5ee6a8;--cell:#202532;--cell2:#292f3e;
+}
+*{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 50% -10%,#1b1931 0,#0a0c11 45%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+button,input{font:inherit} button{color:inherit}
+.app{width:min(1180px,100%);margin:auto;padding:24px 18px 34px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.brand{display:flex;align-items:center;gap:12px}.logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#c45cff);box-shadow:0 0 28px #7c5cff55}
+h1{font-size:20px;margin:0;letter-spacing:-.03em}.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.transport{display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--panel);padding:10px 14px;border-radius:11px;cursor:pointer;transition:.15s transform,.15s background,.15s border-color}
+.btn:hover{background:var(--panel2);border-color:#41495a}.btn:active{transform:scale(.96)}
+.play{background:var(--accent);border-color:var(--accent);font-weight:700;min-width:84px}.play:hover{background:#8d70ff}
+.panel{background:linear-gradient(180deg,#121620,#0f1219);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 18px 50px #0004}
+.controls{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:12px;margin-bottom:14px}
+.control{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px 13px}
+.control label{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-bottom:8px}
+.value{color:var(--text);font-weight:700;text-transform:none;letter-spacing:0}
+input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+.sequencer{overflow:auto;padding-bottom:4px}
+.grid{min-width:790px;display:grid;grid-template-columns:130px repeat(16,1fr);gap:6px}
+.corner{height:22px}.stepnum{text-align:center;color:#697385;font-size:10px;height:22px;line-height:22px}
+.stepnum.bar{color:#b9c1d0}
+.track{display:contents}
+.name{height:44px;display:flex;align-items:center;gap:9px;padding:0 10px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-weight:700;font-size:13px}
+.dot{width:9px;height:9px;border-radius:50%}
+.kick .dot{background:#ff6b7d}.snare .dot{background:#5cc8ff}.hat .dot{background:#ffd45c}.perc .dot{background:#6ee7a8}
+.cell{height:44px;border:1px solid var(--line);border-radius:10px;background:var(--cell);cursor:pointer;position:relative;transition:transform .08s,background .12s,border-color .12s,box-shadow .12s}
+.cell:nth-child(4n+1){background:var(--cell2)}
+.cell:hover{transform:translateY(-1px);border-color:#596174}
+.cell.on{background:var(--accent);border-color:#a993ff;box-shadow:0 5px 18px #7c5cff33}
+.cell.on.kickOn{background:#ff5269;border-color:#ff99a8}.cell.on.snareOn{background:#32b7ff;border-color:#9bddff}.cell.on.hatOn{background:#f2bf32;border-color:#ffe58a}.cell.on.percOn{background:#39ce8b;border-color:#a0ffd0}
+.cell.playing{outline:2px solid var(--text);outline-offset:2px;filter:brightness(1.25);z-index:2}
+.cell.playing.on{box-shadow:0 0 0 3px #ffffff22,0 0 24px #fff3}
+.footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;color:var(--muted);font-size:12px}
+.actions{display:flex;gap:8px}.kbd{padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:#b9c1d0}
+@media(max-width:760px){.app{padding:16px 12px}.controls{grid-template-columns:1fr 1fr}.controls .wide{grid-column:1/-1}header{align-items:flex-start}.grid{grid-template-columns:105px repeat(16,42px);gap:5px}.name,.cell{height:42px}.transport{flex-shrink:0}.play{min-width:72px;padding:9px 10px}.btn{padding:9px 10px}}
+@media(max-width:430px){.controls{grid-template-columns:1fr}.controls .wide{grid-column:auto}h1{font-size:18px}.sub{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand"><div class="logo"></div><div><h1>Pulse Grid</h1><div class="sub">16-step drum machine</div></div></div>
+  <div class="transport"><button class="btn play" id="play">▶ Play</button></div>
+</header>
+
+<section class="panel">
+  <div class="controls">
+    <div class="control wide"><label><span>Tempo</span><span class="value" id="bpmVal">120 BPM</span></label><input id="bpm" type="range" min="60" max="180" value="120"></div>
+    <div class="control"><label><span>Swing</span><span class="value" id="swingVal">0%</span></label><input id="swing" type="range" min="0" max="60" value="0"></div>
+    <div class="control"><label><span>Pattern</span><span class="value">16 steps</span></label><div class="actions"><button class="btn" id="clear">Clear</button><button class="btn" id="random">Randomize</button></div></div>
+  </div>
+
+  <div class="sequencer"><div class="grid" id="grid"></div></div>
+  <div class="footer"><span>Click cells to program • <span class="kbd">Space</span> play/stop</span><span id="status">Ready</span></div>
+</section>
+</div>
+
+<script>
+const tracks=[
+  {name:'Kick',key:'kick',freq:110},
+  {name:'Snare',key:'snare'},
+  {name:'Hats',key:'hat'},
+  {name:'Perc',key:'perc'}
+];
+const steps=16;
+let pattern=[
+ [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+ [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+ [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+ [0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,1]
+];
+let bpm=120,swing=0,current=0,timer=null,isPlaying=false,audio=null;
+
+const grid=document.getElementById('grid');
+const bpmInput=document.getElementById('bpm'), swingInput=document.getElementById('swing');
+const bpmVal=document.getElementById('bpmVal'), swingVal=document.getElementById('swingVal'), status=document.getElementById('status');
+
+function render(){
+ grid.innerHTML='<div class="corner"></div>'+Array.from({length:steps},(_,i)=>`<div class="stepnum ${i%4===0?'bar':''}">${i+1}</div>`).join('');
+ tracks.forEach((t,r)=>{
+   let row=`<div class="name ${t.key}"><span class="dot"></span>${t.name}</div>`;
+   for(let s=0;s<steps;s++) row+=`<button aria-label="${t.name} step ${s+1}" class="cell ${pattern[r][s]?'on '+t.key+'On':''} ${s===current&&isPlaying?'playing':''}" data-r="${r}" data-s="${s}"></button>`;
+   grid.insertAdjacentHTML('beforeend',`<div class="track">${row}</div>`);
+ });
+}
+function clearPlaying(){
+ document.querySelectorAll('.cell.playing').forEach(x=>x.classList.remove('playing'));
+ document.querySelectorAll('.stepnum.active').forEach(x=>x.classList.remove('active'));
+}
+function highlight(){
+ clearPlaying();
+ if(!isPlaying)return;
+ document.querySelectorAll(`.cell[data-s="${current}"]`).forEach(x=>x.classList.add('playing'));
+}
+function ensureAudio(){ if(!audio) audio=new (window.AudioContext||window.webkitAudioContext)(); if(audio.state==='suspended') audio.resume(); }
+function noiseBuffer(){
+ const b=audio.createBuffer(1,audio.sampleRate*.25,audio.sampleRate),d=b.getChannelData(0);
+ for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+ return b;
+}
+function kick(t){
+ const o=audio.createOscillator(),g=audio.createGain();o.type='sine';
+ o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(45,t+.12);
+ g.gain.setValueAtTime(.9,t);g.gain.exponentialRampToValueAtTime(.001,t+.38);
+ o.connect(g).connect(audio.destination);o.start(t);o.stop(t+.4);
+}
+function snare(t){
+ const n=audio.createBufferSource(),ng=audio.createGain(),f=audio.createBiquadFilter();
+ n.buffer=noiseBuffer();f.type='highpass';f.frequency.value=1400;ng.gain.setValueAtTime(.45,t);ng.gain.exponentialRampToValueAtTime(.001,t+.18);
+ n.connect(f).connect(ng).connect(audio.destination);n.start(t);n.stop(t+.2);
+ const o=audio.createOscillator(),g=audio.createGain();o.type='triangle';o.frequency.value=180;g.gain.setValueAtTime(.22,t);g.gain.exponentialRampToValueAtTime(.001,t+.1);o.connect(g).connect(audio.destination);o.start(t);o.stop(t+.12);
+}
+function hat(t){
+ const n=audio.createBufferSource(),g=audio.createGain(),f=audio.createBiquadFilter();
+ n.buffer=noiseBuffer();f.type='highpass';f.frequency.value=6000;g.gain.setValueAtTime(.22,t);g.gain.exponentialRampToValueAtTime(.001,t+.055);
+ n.connect(f).connect(g).connect(audio.destination);n.start(t);n.stop(t+.07);
+}
+function perc(t){
+ const o=audio.createOscillator(),g=audio.createGain();o.type='square';o.frequency.setValueAtTime(480,t);o.frequency.exponentialRampToValueAtTime(180,t+.08);
+ g.gain.setValueAtTime(.14,t);g.gain.exponentialRampToValueAtTime(.001,t+.09);o.connect(g).connect(audio.destination);o.start(t);o.stop(t+.1);
+}
+function trigger(r,t){if(!pattern[r][current])return;[kick,snare,hat,perc][r](t)}
+function tick(){
+ if(!isPlaying)return;
+ ensureAudio();
+ const now=audio.currentTime;
+ const sixteenth=60/bpm/4;
+ const delay=(current%2? swing/100*sixteenth*.5:0);
+ trigger(0,now+delay);trigger(1,now+delay);trigger(2,now+delay);trigger(3,now+delay);
+ highlight();
+ status.textContent=`Playing • step ${current+1}`;
+ current=(current+1)%steps;
+ timer=setTimeout(tick, Math.max(15,(sixteenth+delay)*1000));
+}
+function toggle(){
+ isPlaying=!isPlaying;
+ document.getElementById('play').textContent=isPlaying?'■ Stop':'▶ Play';
+ if(isPlaying){ensureAudio();current=0;tick()}else{clearTimeout(timer);status.textContent='Stopped';clearPlaying();render()}
+}
+grid.addEventListener('click',e=>{
+ const c=e.target.closest('.cell');if(!c)return;
+ const r=+c.dataset.r,s=+c.dataset.s;pattern[r][s]^=1;
+ render();highlight();
+});
+document.getElementById('play').onclick=toggle;
+document.getElementById('clear').onclick=()=>{pattern=pattern.map(r=>r.map(()=>0));render();status.textContent='Pattern cleared'};
+document.getElementById('random').onclick=()=>{pattern=pattern.map((r,i)=>r.map(()=>Math.random()<(i===2?.7:.28)?1:0));render();status.textContent='New pattern'};
+bpmInput.oninput=e=>{bpm=+e.target.value;bpmVal.textContent=`${bpm} BPM`};
+swingInput.oninput=e=>{swing=+e.target.value;swingVal.textContent=`${swing}%`};
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();toggle()}});
+render();
+</script>
+</body>
+</html>
